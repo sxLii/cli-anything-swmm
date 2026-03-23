@@ -1,0 +1,2 @@
+[console_scripts]
+cli-anything-swmm = cli_anything.swmm.swmm_cli:main
