@@ -1,8 +1,8 @@
 # cli-anything-swmm
 
-A complete Command-Line Interface (CLI) harness for EPA SWMM 5 (Storm Water Management Model), built with the [cli-anything](https://github.com/cli-anything) methodology.
+A complete Command-Line Interface (CLI) harness for EPA SWMM 5 (Storm Water Management Model), built with the [CLI-Anything](https://github.com/HKUDS/CLI-Anything) methodology.
 
-SWMM 5 is the industry-standard hydrological and hydraulic simulator for urban drainage networks, modeling rainfall-runoff processes, pipe network flow routing, and water quality. This CLI wraps the full SWMM 5 engine via `pyswmm` and exposes every modelling workflow — project creation, network editing, simulation, results parsing, control rules, and parameter calibration — as composable shell commands.
+SWMM 5 is the industry-standard hydrological and hydraulic simulator for urban drainage networks, modeling rainfall-runoff processes, pipe network flow routing, and water quality. This CLI wraps the full SWMM 5 engine via `pyswmm` and exposes every modelling workflow - project creation, network editing, simulation, results parsing, control rules, and parameter calibration - as composable shell commands.
 
 ---
 
@@ -29,8 +29,6 @@ SWMM 5 is the industry-standard hydrological and hydraulic simulator for urban d
 ## Installation
 
 ```bash
-pip install pyswmm>=2.0.0 swmm-toolkit>=0.15.0
-
 cd /path/to/cli-anything-swmm
 pip install -e .
 ```
@@ -49,7 +47,6 @@ cli-anything-swmm --help
 
 ```bash
 cli-anything-swmm              # launch REPL
-cli-anything-swmm -p urban.inp # open REPL with a project pre-loaded
 ```
 
 ![REPL](REPL.png)
@@ -102,8 +99,8 @@ cli-anything-swmm -p urban.inp timeseries rainfall \
 
 # 5. Set simulation period
 cli-anything-swmm -p urban.inp options set \
-  --start-date 01/01/2023 --end-date 01/01/2023 \
-  --start-time 00:00:00   --end-time 06:00:00
+  --start-date 03/24/2026 --end-date 04/01/2026 \
+  --start-time 00:00:00   --end-time 01:00:00
 
 # 6. Run simulation
 cli-anything-swmm -p urban.inp simulate run
@@ -324,13 +321,6 @@ cli_anything/swmm/
     └── repl_skin.py     # Styled terminal output (cli-anything standard)
 ```
 
-**Three-layer design:**
-
-```
-CLI layer  →  pyswmm Python API  →  SWMM 5 engine (libswmm5.so)
-```
-
-Session state is persisted at `~/.cli-anything-swmm/<project>.session.json` with exclusive file locking and up to 50 undo snapshots.
 
 ---
 

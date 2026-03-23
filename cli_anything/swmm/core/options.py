@@ -70,6 +70,7 @@ def set_options(sections: dict[str, list[str]], **kwargs: str) -> dict[str, str]
         end_date:   "MM/DD/YYYY" or "YYYY-MM-DD"
         start_time: "HH:MM:SS"
         end_time:   "HH:MM:SS"
+        ! TODO: Set REPORT_START_DATE and REPORT_START_TIME to control when reporting begins (defaults to simulation start)
         flow_units: CMS | LPS | CFS | GPM | MGD | IMGD | AFD
         routing:    DYNWAVE | KINWAVE | STEADYSTATE
         report_step: "HH:MM:SS"
