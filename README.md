@@ -95,7 +95,7 @@ cli-anything-swmm -p urban.inp network add-subcatchment --name S1  --raingage RG
 # 4. Generate synthetic rainfall (SCS Type II, 3-hour, 20 mm peak)
 cli-anything-swmm -p urban.inp timeseries rainfall \
   --name TS1 --raingage RG1 \
-  --start "2023-01-01 00:00" --duration 3 --peak 20
+  --start "2026-03-24 00:00" --duration 3 --peak 20
 
 # 5. Set simulation period
 cli-anything-swmm -p urban.inp options set \
