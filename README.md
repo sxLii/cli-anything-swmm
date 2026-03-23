@@ -52,7 +52,7 @@ cli-anything-swmm              # launch REPL
 cli-anything-swmm -p urban.inp # open REPL with a project pre-loaded
 ```
 
-![REPL][REPL.png]
+![REPL](REPL.png)
 
 The REPL wraps the full CLI in an interactive loop with a styled prompt, persistent command history, and built-in control commands:
 
