@@ -391,6 +391,23 @@ class TestCLISubprocess:
         data = json.loads(r.stdout)
         assert "FLOW_UNITS" in data
 
+    def test_options_set_defaults_report_start_to_start(self, tmp_dir):
+        """options set defaults REPORT_START_* to START_* values."""
+        inp = os.path.join(tmp_dir, "opts_report_start.inp")
+        self._run(["--json", "project", "new", "--output", inp])
+
+        r = self._run([
+            "--json", "--project", inp, "options", "set",
+            "--start-date", "01/01/2023",
+            "--end-date", "01/01/2023",
+            "--start-time", "00:00:00",
+            "--end-time", "06:00:00",
+        ])
+        assert r.returncode == 0
+        data = json.loads(r.stdout)
+        assert data["REPORT_START_DATE"] == "01/01/2023"
+        assert data["REPORT_START_TIME"] == "00:00:00"
+
 
 # ---------------------------------------------------------------------------
 # Workflow 4: Undo/Redo integration

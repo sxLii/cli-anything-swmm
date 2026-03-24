@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import copy
-import fcntl
 import json
 import os
 from typing import Any
+
+try:
+    import portalocker
+except ImportError:
+    portalocker = None
 
 from cli_anything.swmm.core.project import parse_inp, write_inp
 
@@ -16,27 +20,29 @@ def _locked_save_json(path: str, data: Any, **dump_kwargs) -> None:
 
     Never uses open("w") which would truncate before lock acquisition.
     """
-    try:
-        f = open(path, "r+")
-    except FileNotFoundError:
-        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-        f = open(path, "w")
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
 
-    with f:
-        _locked = False
-        try:
-            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
-            _locked = True
-        except (ImportError, OSError):
-            pass  # Windows or unsupported FS — proceed unlocked
-        try:
+    if portalocker is not None:
+        with portalocker.Lock(
+            path,
+            mode="a+",
+            flags=portalocker.LockFlags.EXCLUSIVE,
+            timeout=5,
+        ) as f:
             f.seek(0)
             f.truncate()
             json.dump(data, f, **dump_kwargs)
             f.flush()
-        finally:
-            if _locked:
-                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+            os.fsync(f.fileno())
+        return
+
+    # Fallback only if portalocker isn't importable.
+    with open(path, "a+") as f:
+        f.seek(0)
+        f.truncate()
+        json.dump(data, f, **dump_kwargs)
+        f.flush()
+        os.fsync(f.fileno())
 
 
 class Session:

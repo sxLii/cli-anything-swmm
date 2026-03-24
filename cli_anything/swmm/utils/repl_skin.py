@@ -90,6 +90,22 @@ def _visible_len(text: str) -> int:
     return len(_strip_ansi(text))
 
 
+def _sanitize_for_stream(text: str, stream) -> str:
+    """Safely adapt text to a stream encoding.
+
+    Avoids UnicodeEncodeError on Windows consoles using non-UTF encodings
+    (e.g. cp936/gbk) by replacing unsupported glyphs.
+    """
+    if not isinstance(text, str):
+        text = str(text)
+    encoding = getattr(stream, "encoding", None) or "utf-8"
+    try:
+        text.encode(encoding)
+        return text
+    except UnicodeEncodeError:
+        return text.encode(encoding, errors="replace").decode(encoding, errors="replace")
+
+
 class ReplSkin:
     """Unified REPL skin for cli-anything CLIs.
 
@@ -136,6 +152,12 @@ class ReplSkin:
 
         # Detect terminal capabilities
         self._color = self._detect_color_support()
+
+    def _emit(self, text: str, stream=None, end: str = "\n"):
+        """Print text safely for the current stream encoding."""
+        target = stream or sys.stdout
+        safe = _sanitize_for_stream(text, target)
+        print(safe, file=target, end=end)
 
     def _detect_color_support(self) -> bool:
         """Check if terminal supports color."""
@@ -187,15 +209,15 @@ class ReplSkin:
             skill_path_display = self._c(_LIGHT_GRAY, self.skill_path)
             skill_line = f" {skill_icon} {skill_label} {skill_path_display}"
 
-        print(top)
-        print(_box_line(title))
-        print(_box_line(ver))
+        self._emit(top)
+        self._emit(_box_line(title))
+        self._emit(_box_line(ver))
         if skill_line:
-            print(_box_line(skill_line))
-        print(_box_line(empty))
-        print(_box_line(tip))
-        print(bot)
-        print()
+            self._emit(_box_line(skill_line))
+        self._emit(_box_line(empty))
+        self._emit(_box_line(tip))
+        self._emit(bot)
+        self._emit("")
 
     # ── Prompt ────────────────────────────────────────────────────────
 
@@ -296,32 +318,32 @@ class ReplSkin:
     def success(self, message: str):
         """Print a success message with green checkmark."""
         icon = self._c(_GREEN + _BOLD, "✓")
-        print(f"  {icon} {self._c(_GREEN, message)}")
+        self._emit(f"  {icon} {self._c(_GREEN, message)}")
 
     def error(self, message: str):
         """Print an error message with red cross."""
         icon = self._c(_RED + _BOLD, "✗")
-        print(f"  {icon} {self._c(_RED, message)}", file=sys.stderr)
+        self._emit(f"  {icon} {self._c(_RED, message)}", stream=sys.stderr)
 
     def warning(self, message: str):
         """Print a warning message with yellow triangle."""
         icon = self._c(_YELLOW + _BOLD, "⚠")
-        print(f"  {icon} {self._c(_YELLOW, message)}")
+        self._emit(f"  {icon} {self._c(_YELLOW, message)}")
 
     def info(self, message: str):
         """Print an info message with blue dot."""
         icon = self._c(_BLUE, "●")
-        print(f"  {icon} {self._c(_LIGHT_GRAY, message)}")
+        self._emit(f"  {icon} {self._c(_LIGHT_GRAY, message)}")
 
     def hint(self, message: str):
         """Print a subtle hint message."""
-        print(f"  {self._c(_DARK_GRAY, message)}")
+        self._emit(f"  {self._c(_DARK_GRAY, message)}")
 
     def section(self, title: str):
         """Print a section header."""
-        print()
-        print(f"  {self._c(self.accent + _BOLD, title)}")
-        print(f"  {self._c(_DARK_GRAY, _H_LINE * len(title))}")
+        self._emit("")
+        self._emit(f"  {self._c(self.accent + _BOLD, title)}")
+        self._emit(f"  {self._c(_DARK_GRAY, _H_LINE * len(title))}")
 
     # ── Status display ────────────────────────────────────────────────
 
@@ -329,7 +351,7 @@ class ReplSkin:
         """Print a key-value status line."""
         lbl = self._c(_GRAY, f"  {label}:")
         val = self._c(_WHITE, f" {value}")
-        print(f"{lbl}{val}")
+        self._emit(f"{lbl}{val}")
 
     def status_block(self, items: dict[str, str], title: str = ""):
         """Print a block of status key-value pairs.
@@ -345,7 +367,7 @@ class ReplSkin:
         for label, value in items.items():
             lbl = self._c(_GRAY, f"  {label:<{max_key}}")
             val = self._c(_WHITE, f"  {value}")
-            print(f"{lbl}{val}")
+            self._emit(f"{lbl}{val}")
 
     def progress(self, current: int, total: int, label: str = ""):
         """Print a simple progress indicator.
@@ -362,7 +384,7 @@ class ReplSkin:
         text = f"  {self._c(_CYAN, bar)} {self._c(_GRAY, f'{pct:3d}%')}"
         if label:
             text += f" {self._c(_LIGHT_GRAY, label)}"
-        print(text)
+        self._emit(text)
 
     # ── Table display ─────────────────────────────────────────────────
 
@@ -398,12 +420,12 @@ class ReplSkin:
         ]
         sep = self._c(_DARK_GRAY, f" {_V_LINE} ")
         header_line = f"  {sep.join(header_cells)}"
-        print(header_line)
+        self._emit(header_line)
 
         # Separator
         sep_parts = [self._c(_DARK_GRAY, _H_LINE * w) for w in col_widths]
         sep_line = self._c(_DARK_GRAY, f"  {'───'.join([_H_LINE * w for w in col_widths])}")
-        print(sep_line)
+        self._emit(sep_line)
 
         # Rows
         for row in rows:
@@ -412,7 +434,7 @@ class ReplSkin:
                 if i < len(col_widths):
                     cells.append(self._c(_LIGHT_GRAY, pad(str(cell), col_widths[i])))
             row_sep = self._c(_DARK_GRAY, f" {_V_LINE} ")
-            print(f"  {row_sep.join(cells)}")
+            self._emit(f"  {row_sep.join(cells)}")
 
     # ── Help display ──────────────────────────────────────────────────
 
@@ -427,14 +449,14 @@ class ReplSkin:
         for cmd, desc in commands.items():
             cmd_styled = self._c(self.accent, f"  {cmd:<{max_cmd}}")
             desc_styled = self._c(_GRAY, f"  {desc}")
-            print(f"{cmd_styled}{desc_styled}")
-        print()
+            self._emit(f"{cmd_styled}{desc_styled}")
+        self._emit("")
 
     # ── Goodbye ───────────────────────────────────────────────────────
 
     def print_goodbye(self):
         """Print a styled goodbye message."""
-        print(f"\n  {_ICON_SMALL} {self._c(_GRAY, 'Goodbye!')}\n")
+        self._emit(f"\n  {_ICON_SMALL} {self._c(_GRAY, 'Goodbye!')}\n")
 
     # ── Prompt toolkit session factory ────────────────────────────────
 

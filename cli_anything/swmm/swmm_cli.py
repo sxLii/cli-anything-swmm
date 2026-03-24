@@ -62,6 +62,17 @@ def _out(data, ctx_obj=None):
         _pretty(data)
 
 
+def _status_symbol(primary: str, fallback: str, stream=None) -> str:
+    """Return a symbol that can be encoded on the given stream."""
+    target = stream or sys.stderr
+    encoding = getattr(target, "encoding", None) or "utf-8"
+    try:
+        primary.encode(encoding)
+        return primary
+    except UnicodeEncodeError:
+        return fallback
+
+
 def _pretty(data, indent=0):
     prefix = "  " * indent
     if isinstance(data, dict):
@@ -85,7 +96,8 @@ def _pretty(data, indent=0):
 def _ok(msg, ctx_obj=None):
     """Success message: stderr in JSON mode, stdout otherwise."""
     if _is_json(ctx_obj):
-        click.echo(f"  \u2713 {msg}", file=sys.stderr)
+        icon = _status_symbol("\u2713", "OK", stream=sys.stderr)
+        click.echo(f"  {icon} {msg}", file=sys.stderr)
     else:
         _skin.success(msg)
 
@@ -98,7 +110,8 @@ def _err(msg, ctx_obj=None):
 def _info(msg, ctx_obj=None):
     """Info message: stderr in JSON mode, stdout otherwise."""
     if _is_json(ctx_obj):
-        click.echo(f"  \u25cf {msg}", file=sys.stderr)
+        icon = _status_symbol("\u25cf", "-", stream=sys.stderr)
+        click.echo(f"  {icon} {msg}", file=sys.stderr)
     else:
         _skin.info(msg)
 
@@ -685,6 +698,8 @@ def options_set(ctx, start_date, end_date, start_time, end_time,
     if end_date:     kwargs["END_DATE"] = end_date
     if start_time:   kwargs["START_TIME"] = start_time
     if end_time:     kwargs["END_TIME"] = end_time
+    if start_date:   kwargs["REPORT_START_DATE"] = start_date
+    if start_time:   kwargs["REPORT_START_TIME"] = start_time
     if routing:      kwargs["FLOW_ROUTING"] = routing
     if flow_units:   kwargs["FLOW_UNITS"] = flow_units
     if report_step:  kwargs["REPORT_STEP"] = report_step
@@ -745,16 +760,44 @@ def timeseries_add(ctx, name, data):
 @click.option("--start", required=True, metavar="DATETIME")
 @click.option("--duration", required=True, type=float)
 @click.option("--peak", required=True, type=float)
-@click.option("--pattern", type=click.Choice(["SCS","UNIFORM","TRIANGULAR"],
+@click.option("--pattern", type=click.Choice(["SCS", "UNIFORM", "TRIANGULAR", "CHICAGO"],
                                              case_sensitive=False), default="SCS")
+@click.option("--timestep-minutes", type=int, default=5, show_default=True)
+@click.option("--chicago-a", type=float, default=None)
+@click.option("--chicago-c", type=float, default=None)
+@click.option("--chicago-n", type=float, default=None)
+@click.option("--chicago-b", type=float, default=None)
+@click.option("--chicago-r", type=float, default=None)
 @click.pass_context
-def timeseries_rainfall(ctx, name, raingage, start, duration, peak, pattern):
+def timeseries_rainfall(
+    ctx,
+    name,
+    raingage,
+    start,
+    duration,
+    peak,
+    pattern,
+    timestep_minutes,
+    chicago_a,
+    chicago_c,
+    chicago_n,
+    chicago_b,
+    chicago_r,
+):
     """Generate synthetic rainfall timeseries."""
     sections = _require_project(ctx)
     _session.push()
     try:
+        if pattern.upper() == "CHICAGO" and chicago_r is not None and not (0 < chicago_r < 1):
+            raise ValueError("--chicago-r must satisfy 0 < r < 1")
         result = add_rainfall_event(sections, raingage, start, duration, peak,
-                                    pattern=pattern, ts_name=name)
+                                    pattern=pattern, ts_name=name,
+                                    timestep_minutes=timestep_minutes,
+                                    chicago_a=chicago_a,
+                                    chicago_c=chicago_c,
+                                    chicago_n=chicago_n,
+                                    chicago_b=chicago_b,
+                                    chicago_r=chicago_r)
         _session.save()
         _ok(f"Generated rainfall '{name}': {result['points']} points, "
             f"{result['total_depth_mm']} mm total", ctx.obj)
@@ -1461,4 +1504,4 @@ def rules_revise(ctx, name, if_clauses, then_actions, else_actions,
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    main()
+    main(windows_expand_args=False)

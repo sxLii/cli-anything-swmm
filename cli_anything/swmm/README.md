@@ -94,6 +94,12 @@ cli-anything-swmm --project my_project.inp timeseries rainfall \
   --name TS1 --raingage RG1 \
   --start "2023-01-01 00:00" --duration 3 --peak 20
 
+# Generate CHICAGO synthetic rainfall (custom coefficients)
+cli-anything-swmm --project my_project.inp timeseries rainfall \
+  --name TS_CHI --raingage RG1 \
+  --start "2023-01-01 00:00" --duration 3 --peak 20 --pattern CHICAGO \
+  --chicago-a 24 --chicago-c 0.2 --chicago-n 0.75 --chicago-b 15 --chicago-r 0.4
+
 # Set simulation dates
 cli-anything-swmm --project my_project.inp options set \
   --start-date 01/01/2023 --end-date 01/01/2023 \
@@ -155,7 +161,7 @@ cli-anything-swmm --json --project my_project.inp network list
 | Command | Description |
 |---------|-------------|
 | `timeseries add --name NAME --data "..."` | Add raw timeseries |
-| `timeseries rainfall --name NAME --raingage ...` | Synthetic rainfall |
+| `timeseries rainfall --name NAME --raingage ...` | Synthetic rainfall (`SCS`, `UNIFORM`, `TRIANGULAR`, `CHICAGO`) |
 | `timeseries list` | List all timeseries |
 
 ### `simulate`

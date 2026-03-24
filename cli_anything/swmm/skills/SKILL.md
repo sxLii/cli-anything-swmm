@@ -310,7 +310,7 @@ cli_anything/swmm/
 │   ├── timeseries.py    # timeseries CRUD + synthetic rainfall generators
 │   ├── simulate.py      # run_simulation() / validate_inp() via pyswmm
 │   ├── results.py       # parse_report() — .rpt section/table parser
-│   ├── session.py       # undo/redo session with fcntl-locked JSON saves
+│   ├── session.py       # undo/redo session with cross-platform file-locked JSON saves
 │   ├── calibrate.py     # parameter calibration (LHS, grid, NSE/RMSE metrics)
 │   └── rules.py         # IF/THEN/ELSE control rule management
 ├── utils/

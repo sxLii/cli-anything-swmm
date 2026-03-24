@@ -11,7 +11,7 @@ SWMM 5 is the industry-standard hydrological and hydraulic simulator for urban d
 - **Full SWMM 5 workflow** — create, edit, simulate, and post-process from a single CLI
 - **Interactive REPL** — styled prompt with persistent history, undo/redo, and live project status
 - **JSON output** — every command supports `--json` for machine-readable output (AI-agent friendly)
-- **Synthetic rainfall generation** — SCS Type II, uniform, and triangular patterns
+- **Synthetic rainfall generation** — SCS Type II, uniform, triangular, and CHICAGO patterns
 - **Control rules** — add, edit, and remove IF/THEN/ELSE pump/weir/orifice control rules
 - **Parameter calibration** — sensitivity analysis, Latin Hypercube Sampling, NSE/RMSE/MAE/PBias metrics
 - **Session management** — undo/redo with file-locked persistent state (up to 50 history snapshots)
@@ -96,6 +96,13 @@ cli-anything-swmm -p urban.inp network add-subcatchment --name S1  --raingage RG
 cli-anything-swmm -p urban.inp timeseries rainfall \
   --name TS1 --raingage RG1 \
   --start "2026-03-24 00:00" --duration 3 --peak 20
+
+# 4b. Generate CHICAGO synthetic rainfall (custom shape + 10-minute timestep)
+cli-anything-swmm -p urban.inp timeseries rainfall \
+  --name TS_CHI --raingage RG1 \
+  --start "2026-03-24 00:00" --duration 3 --peak 20 \
+  --pattern CHICAGO --timestep-minutes 10 \
+  --chicago-a 24 --chicago-c 0.2 --chicago-n 0.75 --chicago-b 15 --chicago-r 0.4
 
 # 5. Set simulation period
 cli-anything-swmm -p urban.inp options set \
@@ -193,13 +200,14 @@ Key `options set` flags:
 | Command | Key Options | Description |
 |---------|-------------|-------------|
 | `timeseries add` | `--name --data "DATE TIME VALUE ..."` | Add raw timeseries data |
-| `timeseries rainfall` | `--name --raingage --start --duration --peak [--pattern SCS\|UNIFORM\|TRIANGULAR]` | Generate synthetic rainfall |
+| `timeseries rainfall` | `--name --raingage --start --duration --peak [--pattern SCS\|UNIFORM\|TRIANGULAR\|CHICAGO] [--timestep-minutes N] [--chicago-a A --chicago-c C --chicago-n N --chicago-b B --chicago-r R]` | Generate synthetic rainfall |
 | `timeseries list` | — | List all timeseries in the project |
 
 Rainfall patterns:
 - **SCS** — SCS Type II 24-hour dimensionless distribution (default)
 - **UNIFORM** — Constant intensity throughout duration
 - **TRIANGULAR** — Linearly rises to peak then falls
+- **CHICAGO** — Chicago ICM shape (coefficients `a/c/n/b/r`) scaled to `--peak`
 
 ---
 
@@ -313,7 +321,7 @@ cli_anything/swmm/
 │   ├── timeseries.py    # Rainfall timeseries generation
 │   ├── simulate.py      # pyswmm simulation runner
 │   ├── results.py       # .rpt file parser
-│   ├── session.py       # Stateful session + undo/redo (fcntl-locked JSON)
+│   ├── session.py       # Stateful session + undo/redo (cross-platform file-locked JSON)
 │   ├── rules.py         # IF/THEN/ELSE control rules
 │   └── calibrate.py     # Parameter calibration (LHS, grid, NSE/RMSE)
 └── utils/

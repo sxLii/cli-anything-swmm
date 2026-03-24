@@ -78,6 +78,12 @@ def list_timeseries(sections: dict[str, list[str]]) -> list[dict[str, Any]]:
 # Synthetic rainfall generation
 # ---------------------------------------------------------------------------
 
+CHICAGO_DEFAULT_A = 25.0
+CHICAGO_DEFAULT_C = 0.15
+CHICAGO_DEFAULT_N = 0.70
+CHICAGO_DEFAULT_B = 20.0
+CHICAGO_DEFAULT_R = 0.37
+
 
 def add_rainfall_event(
     sections: dict[str, list[str]],
@@ -87,6 +93,12 @@ def add_rainfall_event(
     peak_intensity_mm_hr: float,
     pattern: str = "SCS",
     ts_name: str | None = None,
+    timestep_minutes: float = 5,
+    chicago_a: float | None = None,
+    chicago_c: float | None = None,
+    chicago_n: float | None = None,
+    chicago_b: float | None = None,
+    chicago_r: float | None = None,
 ) -> dict[str, Any]:
     """Generate synthetic rainfall and add to TIMESERIES + RAINGAGES.
 
@@ -102,7 +114,14 @@ def add_rainfall_event(
             - "SCS": SCS Type II (peak at 60% of duration)
             - "UNIFORM": Constant intensity throughout
             - "TRIANGULAR": Linear increase to peak then decrease
+            - "CHICAGO": Chicago ICM pattern (shape from a,c,n,b,r; scaled to peak)
         ts_name: Timeseries name. Defaults to "{raingage_name}_TS".
+        timestep_minutes: Rainfall interval in minutes (must be positive integer).
+        chicago_a: Chicago coefficient A.
+        chicago_c: Chicago coefficient C.
+        chicago_n: Chicago coefficient n.
+        chicago_b: Chicago coefficient b.
+        chicago_r: Chicago peak ratio r (0 < r < 1).
 
     Returns:
         Dict with timeseries name, data points, and total depth.
@@ -110,26 +129,77 @@ def add_rainfall_event(
     if ts_name is None:
         ts_name = f"{raingage_name}_TS"
 
+    if duration_hours <= 0:
+        raise ValueError("duration_hours must be > 0")
+    if peak_intensity_mm_hr < 0:
+        raise ValueError("peak_intensity_mm_hr must be >= 0")
+    if timestep_minutes <= 0:
+        raise ValueError("timestep_minutes must be > 0")
+    if not float(timestep_minutes).is_integer():
+        raise ValueError("timestep_minutes must be an integer number of minutes")
+
+    interval_minutes = int(timestep_minutes)
+    pattern_upper = pattern.upper()
+
+    c_a = CHICAGO_DEFAULT_A if chicago_a is None else chicago_a
+    c_c = CHICAGO_DEFAULT_C if chicago_c is None else chicago_c
+    c_n = CHICAGO_DEFAULT_N if chicago_n is None else chicago_n
+    c_b = CHICAGO_DEFAULT_B if chicago_b is None else chicago_b
+    c_r = CHICAGO_DEFAULT_R if chicago_r is None else chicago_r
+
+    if pattern_upper == "CHICAGO":
+        if c_a <= 0 or c_n <= 0 or c_b <= 0:
+            raise ValueError("CHICAGO parameters a, n, b must be > 0")
+        if c_c < 0:
+            raise ValueError("CHICAGO parameter c must be >= 0")
+        if not 0 < c_r < 1:
+            raise ValueError("CHICAGO parameter r must satisfy 0 < r < 1")
+
     # Parse start datetime
     start = _parse_datetime(start_datetime)
 
-    # Generate data points at 5-minute intervals
-    interval_minutes = 5
-    n_points = int(duration_hours * 60 / interval_minutes) + 1
+    storm_minutes = duration_hours * 60.0
+    n_steps = max(1, int(math.ceil(storm_minutes / interval_minutes)))
+    t_minutes = [min(i * interval_minutes, storm_minutes) for i in range(n_steps + 1)]
+
+    chicago_raw: list[float] = [0.0] * len(t_minutes)
+    if pattern_upper == "CHICAGO":
+        cumulative = [
+            _chicago_icm_cumulative_depth(
+                t_frac=(t_min / storm_minutes) if storm_minutes > 0 else 0.0,
+                duration_hours=duration_hours,
+                a=c_a,
+                c=c_c,
+                n=c_n,
+                b=c_b,
+                r=c_r,
+            )
+            for t_min in t_minutes
+        ]
+        for i in range(1, len(t_minutes)):
+            dt_hours = (t_minutes[i] - t_minutes[i - 1]) / 60.0
+            if dt_hours <= 0:
+                chicago_raw[i] = 0.0
+            else:
+                chicago_raw[i] = max(0.0, (cumulative[i] - cumulative[i - 1]) / dt_hours)
+
+        max_raw = max(chicago_raw) if chicago_raw else 0.0
+        chicago_scale = (peak_intensity_mm_hr / max_raw) if max_raw > 0 else 0.0
+        chicago_raw = [v * chicago_scale for v in chicago_raw]
 
     data: list[tuple[str, str, float]] = []
     total_depth = 0.0
 
-    for i in range(n_points + 1):
-        t_min = i * interval_minutes
-        t_frac = t_min / (duration_hours * 60)  # 0..1
+    for i, t_min in enumerate(t_minutes):
+        t_frac = (t_min / storm_minutes) if storm_minutes > 0 else 0.0
+        if pattern_upper == "CHICAGO":
+            intensity = chicago_raw[i]
+        else:
+            intensity = _get_intensity(t_frac, peak_intensity_mm_hr, pattern_upper)
 
-        intensity = _get_intensity(t_frac, peak_intensity_mm_hr, pattern)
-
-        # Depth per interval = intensity * interval_hours
-        interval_hours = interval_minutes / 60.0
-        depth = intensity * interval_hours
-        total_depth += depth
+        if i > 0:
+            dt_hours = (t_minutes[i] - t_minutes[i - 1]) / 60.0
+            total_depth += intensity * dt_hours
 
         dt = start + timedelta(minutes=t_min)
         date_str = dt.strftime("%m/%d/%Y")
@@ -138,7 +208,7 @@ def add_rainfall_event(
         data.append((date_str, time_str, round(intensity, 4)))
 
     # Add trailing zero if last point non-zero
-    last_dt = start + timedelta(minutes=n_points * interval_minutes + interval_minutes)
+    last_dt = start + timedelta(minutes=t_minutes[-1] + interval_minutes)
     date_str = last_dt.strftime("%m/%d/%Y")
     time_str = f"{last_dt.hour}:{last_dt.minute:02d}"
     data.append((date_str, time_str, 0.0))
@@ -147,7 +217,7 @@ def add_rainfall_event(
     add_timeseries(sections, ts_name, data)
 
     # Update or add rain gage
-    _update_raingage(sections, raingage_name, ts_name)
+    _update_raingage(sections, raingage_name, ts_name, interval_minutes)
 
     return {
         "timeseries": ts_name,
@@ -155,7 +225,8 @@ def add_rainfall_event(
         "start": start_datetime,
         "duration_hours": duration_hours,
         "peak_mm_hr": peak_intensity_mm_hr,
-        "pattern": pattern,
+        "pattern": pattern_upper,
+        "timestep_minutes": interval_minutes,
         "points": len(data),
         "total_depth_mm": round(total_depth, 2),
     }
@@ -194,19 +265,17 @@ def _get_intensity(t_frac: float, peak: float, pattern: str) -> float:
     if t_frac < 0 or t_frac > 1:
         return 0.0
 
-    p = pattern.upper()
-
-    if p == "UNIFORM":
+    if pattern == "UNIFORM":
         return peak if 0 < t_frac < 1 else 0.0
 
-    elif p == "TRIANGULAR":
+    elif pattern == "TRIANGULAR":
         # Ramp up to peak at midpoint, then ramp down
         if t_frac <= 0.5:
             return peak * (t_frac / 0.5)
         else:
             return peak * ((1.0 - t_frac) / 0.5)
 
-    elif p == "SCS":
+    elif pattern == "SCS":
         # Approximate SCS Type II: peak at ~60% of duration
         # Use a beta-distribution-like curve
         peak_frac = 0.60
@@ -226,6 +295,7 @@ def _update_raingage(
     sections: dict[str, list[str]],
     raingage_name: str,
     ts_name: str,
+    interval_minutes: int = 5,
 ) -> None:
     """Update an existing rain gage's timeseries, or add a new one."""
     if "RAINGAGES" not in sections:
@@ -241,6 +311,44 @@ def _update_raingage(
         or line.strip().split()[0] != raingage_name
     ]
 
+    interval_str = _format_interval(interval_minutes)
+
     # Add updated entry — format is INTENSITY (mm/hr values), source is TIMESERIES <name>
-    line = f"{raingage_name:<16} INTENSITY  0:05      1.0       TIMESERIES {ts_name}"
+    line = f"{raingage_name:<16} INTENSITY  {interval_str:<9} 1.0       TIMESERIES {ts_name}"
     sections["RAINGAGES"].append(line)
+
+
+def _format_interval(minutes: int) -> str:
+    """Format integer minutes as H:MM for SWMM RAINGAGES interval."""
+    hours = minutes // 60
+    mins = minutes % 60
+    return f"{hours}:{mins:02d}"
+
+
+def _chicago_icm_cumulative_depth(
+    t_frac: float,
+    duration_hours: float,
+    a: float,
+    c: float,
+    n: float,
+    b: float,
+    r: float,
+) -> float:
+    """Chicago ICM cumulative depth at normalized time t_frac (0..1)."""
+    if t_frac <= 0:
+        return 0.0
+    if t_frac >= 1:
+        t_frac = 1.0
+
+    duration_minutes = duration_hours * 60.0
+    t_minutes = t_frac * duration_minutes
+    p = max(duration_hours, 1e-6)
+    a_eff = a * (1.0 + c * math.log10(p))
+    ht = a_eff * duration_minutes / (duration_minutes + b) ** n
+
+    if t_minutes <= r * duration_minutes:
+        term = 1.0 - t_minutes / (r * (duration_minutes + b))
+        return ht * (r - (r - t_minutes / duration_minutes) * term ** (-n))
+
+    term = 1.0 + (t_minutes - duration_minutes) / ((1.0 - r) * (duration_minutes + b))
+    return ht * (r + (t_minutes / duration_minutes - r) * term ** (-n))

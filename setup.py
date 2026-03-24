@@ -7,6 +7,7 @@ setup(
     install_requires=[
         "click>=8.0.0",
         "prompt-toolkit>=3.0.0",
+        "portalocker>=2.8.0",
         "pyswmm>=2.0.0",
         "swmm-toolkit>=0.15.0",
     ],
