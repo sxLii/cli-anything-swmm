@@ -451,6 +451,49 @@ class TestAddRainfallEvent:
         assert result["pattern"] == "TRIANGULAR"
         assert result["total_depth_mm"] > 0
 
+    def test_add_rainfall_chicago(self, basic_sections):
+        result = add_rainfall_event(
+            basic_sections,
+            "RG_CHI",
+            "2023-01-01 00:00",
+            2.0,
+            25.0,
+            pattern="CHICAGO",
+            timestep_minutes=10,
+            chicago_a=24.0,
+            chicago_c=0.2,
+            chicago_n=0.75,
+            chicago_b=15.0,
+            chicago_r=0.4,
+        )
+        assert result["pattern"] == "CHICAGO"
+        assert result["timestep_minutes"] == 10
+        assert result["total_depth_mm"] > 0
+        assert any("RG_CHI" in l and "0:10" in l for l in basic_sections["RAINGAGES"])
+
+    def test_add_rainfall_chicago_invalid_r(self, basic_sections):
+        with pytest.raises(ValueError):
+            add_rainfall_event(
+                basic_sections,
+                "RG_BAD",
+                "2023-01-01 00:00",
+                1.0,
+                20.0,
+                pattern="CHICAGO",
+                chicago_r=1.0,
+            )
+
+    def test_add_rainfall_invalid_timestep(self, basic_sections):
+        with pytest.raises(ValueError):
+            add_rainfall_event(
+                basic_sections,
+                "RG_BAD_STEP",
+                "2023-01-01 00:00",
+                1.0,
+                20.0,
+                timestep_minutes=2.5,
+            )
+
     def test_rainfall_total_depth_reasonable(self, basic_sections):
         # 2-hour storm, 20 mm/hr peak — expect total depth in [5, 30] mm range
         result = add_rainfall_event(
