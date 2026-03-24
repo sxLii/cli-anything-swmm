@@ -328,7 +328,7 @@ The CLI maintains an in-process session with full undo/redo:
 
 All `network`, `options`, `timeseries`, and `rules` commands auto-push before modifying and auto-save after. In the REPL, use `undo` / `redo` built-in commands or call them as subcommands in a script.
 
-The session state is stored in `~/.cli-anything-swmm/<project>.session.json` and is locked with `fcntl` to prevent concurrent corruption.
+The session state is stored in `~/.cli-anything-swmm/<project>.session.json` and is protected with cross-platform file locking to prevent concurrent corruption.
 
 ---
 
